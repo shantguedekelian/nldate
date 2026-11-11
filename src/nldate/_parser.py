@@ -17,32 +17,50 @@ for _i, _name in enumerate(calendar.day_name):
     _WEEKDAYS[calendar.day_abbr[_i].lower()] = _i
 _WEEKDAYS.update({"tues": 1, "weds": 2, "thur": 3, "thurs": 3})
 
-_NUMBER_WORDS: dict[str, int] = {
-    "a": 1,
-    "an": 1,
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-    "six": 6,
-    "seven": 7,
-    "eight": 8,
-    "nine": 9,
-    "ten": 10,
-    "eleven": 11,
-    "twelve": 12,
-}
+_UNITS_SMALL = [
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+]
+_TENS = ["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+
+_NUMBER_WORDS: dict[str, int] = {"a": 1, "an": 1}
+_NUMBER_WORDS.update({w: i for i, w in enumerate(_UNITS_SMALL)})
+for _t, _word in enumerate(_TENS, start=2):
+    _NUMBER_WORDS[_word] = _t * 10
+    for _u in range(1, 10):
+        _NUMBER_WORDS[f"{_word}-{_UNITS_SMALL[_u]}"] = _t * 10 + _u
+
+_UNIT_DAYS = {"day": 1, "week": 7, "fortnight": 14}
+_UNIT_RE = "day|week|fortnight|month|year"
 
 _MONTH_RE = "|".join(sorted(_MONTHS, key=len, reverse=True))
 _WEEKDAY_RE = "|".join(sorted(_WEEKDAYS, key=len, reverse=True))
-_NUM_RE = r"\d+|" + "|".join(_NUMBER_WORDS)
-_QUANTITY_RE = rf"(?:{_NUM_RE})\s+(?:day|week|month|year)s?"
+_NUM_RE = r"\d+|" + "|".join(sorted(_NUMBER_WORDS, key=len, reverse=True))
+_QUANTITY_RE = rf"(?:(?:{_NUM_RE})\s+)?(?:{_UNIT_RE})s?"
 _OFFSET_RE = rf"{_QUANTITY_RE}(?:\s*(?:,\s*and|,|and)?\s*{_QUANTITY_RE})*"
 
-_QUANTITY = re.compile(rf"({_NUM_RE})\s+(day|week|month|year)s?")
+_QUANTITY = re.compile(rf"(?:({_NUM_RE})\s+)?({_UNIT_RE})s?")
 _OFFSET = re.compile(_OFFSET_RE)
-_ANCHORED = re.compile(r"(.+?)\s+(?:before|after|from|past)\s+(.+)")
+_ANCHORED = re.compile(r"(?:the\s+)?(.+?)\s+(?:before|after|from|past)\s+(.+)")
+_THE = re.compile(r"the\s+(.+)")
 _IN = re.compile(r"in\s+(.+)")
 _AGO = re.compile(r"(.+?)\s+ago")
 _ISO = re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})")
@@ -99,15 +117,13 @@ def _parse_offset(text: str) -> tuple[int, int, int]:
         raise ValueError(f"unrecognized offset: {text!r}")
     years = months = days = 0
     for num, unit in _QUANTITY.findall(text):
-        n = int(num) if num.isdigit() else _NUMBER_WORDS[num]
+        n = (int(num) if num.isdigit() else _NUMBER_WORDS[num]) if num else 1
         if unit == "year":
             years += n
         elif unit == "month":
             months += n
-        elif unit == "week":
-            days += 7 * n
         else:
-            days += n
+            days += _UNIT_DAYS[unit] * n
     return years, months, days
 
 
@@ -122,6 +138,8 @@ def _shift(anchor: date, years: int, months: int, days: int) -> date:
 
 
 def _parse_base(text: str, today: date) -> date:
+    if m := _THE.fullmatch(text):
+        return _parse_base(m.group(1), today)
     if text in ("today", "now"):
         return today
     if text == "tomorrow":

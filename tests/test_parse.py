@@ -103,3 +103,23 @@ def test_default_today_is_used() -> None:
 def test_invalid_input_raises(s: str) -> None:
     with pytest.raises(ValueError):
         parse(s, today=TODAY)
+
+
+@pytest.mark.parametrize(
+    ("s", "expected"),
+    [
+        ("the day after tomorrow", date(2025, 11, 14)),
+        ("the day before yesterday", date(2025, 11, 10)),
+        ("the day after December 1st, 2025", date(2025, 12, 2)),
+        ("the day before December 1st, 2025", date(2025, 11, 30)),
+        ("the day after next Tuesday", date(2025, 11, 19)),
+        ("a week after tomorrow", date(2025, 11, 20)),
+        ("a week from tomorrow", date(2025, 11, 20)),
+        ("a day ago", date(2025, 11, 11)),
+        ("in a week", date(2025, 11, 19)),
+        ("three days ago", date(2025, 11, 9)),
+        ("two weeks from today", date(2025, 11, 26)),
+    ],
+)
+def test_article_and_word_forms(s: str, expected: date) -> None:
+    assert parse(s, today=TODAY) == expected
